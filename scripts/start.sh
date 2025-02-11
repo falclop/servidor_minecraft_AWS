@@ -27,14 +27,15 @@ read -p "Seleccione una opción: " OP
             apt install openjdk-21-jre -y
 
             # Creamos directorio para server Minecraft y descargamos el server
-            mkdir -p "${MINECRAFT_DIR}"
-            wget "$SERVER_JAR_URL" -O "${MINECRAFT_DIR}"/server.jar
-
+            mkdir -p ${MINECRAFT_DIR} && cd ${MINECRAFT_DIR}
+            wget "$SERVER_JAR_URL" -O server.jar
+            java -Xmx1024M -Xms1024M -jar server.jar nogui > /dev/null 2>&1 &
+            sleep 10
             # Aceptamos el EULA del servidor
-            echo "eula=true" > ${MINECRAFT_DIR}eula.txt
+            echo "eula=true" > eula.txt
             
             # Configuramos las propiedades de server
-            sed -i "s/online-mode=true/online-mode=false/" ${MINECRAFT_DIR}/server.properties
+            sed -i "s/online-mode=true/online-mode=false/" server.properties
             read -p "Cantidad de jugadores (máx. 10): " PLY
             while (( PLY > 10 || PLY < 1 )) ; do
                 read -p "Debe estar entre 1 y 10. Introduzca cantidad de jugadores: " PLY
@@ -48,7 +49,7 @@ read -p "Seleccione una opción: " OP
                 ;;
             esac
             read -p "Escriba el mensaje de bienvenida: " MESG
-            sed -i sed -i "s/motd=.*/motd=${MESG}/" ${MINECRAFT_DIR}/server.properties
+            sed -i "s/motd=.*/motd=${MESG}/" ${MINECRAFT_DIR}/server.properties
             # Convertimos el server en servicio
             touch ${SERVICE_FILE}
             chmod 777 ${SERVICE_FILE}
