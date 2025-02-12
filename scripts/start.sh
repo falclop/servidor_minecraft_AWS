@@ -1,9 +1,25 @@
 #!/bin/bash
+# El siguiente script debe lanzarse con permisos de sudo
+source .env
+# Función para crear una copia de seguridad del servidor de Minecraft
+hacer_backup() {
+    if [[ ! -d "$BACKUP_DIR" ]]; then
+        mkdir -p ${BACKUP_DIR}
+    fi
+    tar -czvf ${BACKUP_DIR}/backup-$(date +%F_%H:%M).tar.gz ${MINECRAFT_DIR} > /dev/null 2>&1
+    echo -e "\nBackup completado en $BACKUP_DIR"
+}
+# Función para programar con crontab un copia de seguridad en caliente del servidor a las 3:00 AM
+programar_backup() {
+    BACKUP_CRON="tar -czvf ${BACKUP_DIR}/backup-$(date +%F_%H:%M).tar.gz ${MINECRAFT_DIR}"
+    if crontab -l 2>/dev/null | grep -q "${BACKUP_CRON}"; then
+        echo "Ya hay una copia de seguridad programada en cron."
+    else
+        (crontab -l 2>/dev/null; echo "0 3 * * * ${BACKUP_CRON}") | crontab -
+        echo "¡Backup programado a las 3:00 AM todos los días!"
+    fi
+}
 
-MINECRAFT_DIR="/opt/minecraft-server"
-BACKUP_DIR="/opt/minecraft-backups"
-SERVICE_FILE="/etc/systemd/system/minecraft.service"
-SERVER_JAR_URL="https://piston-data.mojang.com/v1/objects/4707d00eb834b446575d89a61a11b5d548d8c001/server.jar"
 menu() {
     echo -e "1. Instalar servidor\n2. Desinstalar servidor\n3. Crear copia de seguridad\n0. Salir del programa"
 }
@@ -25,39 +41,47 @@ echo -e "⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿"
 echo -e "\n                 🎮 ¡Bienvenido al Instalador del Servidor de Minecraft! 🎮\n"
 
 menu
-read -p "Seleccione una opción: " OP
+echo -e "\nSeleccione una opción: " 
+read OP
     case $OP in
         1)
-            echo "Instalando servidor..."
+            echo -e "\nInstalando servidor..."
             # Actualización de repositorios
-            apt update && apt upgrade -y
+            echo -e "\nActualizando repositorios..."
+            # Usamos aquí la salida del comando a /dev/null, para que el usuario no vea la salida del comando
+            # los errores 2> los lanzamos al mismo lugar que 1, es decir a /dev/null
+            apt update && apt upgrade -y > /dev/null 2>&1
 
             # Instalar java y sus dependencias
-            apt install openjdk-21-jre -y
+            echo -e "\nInstalando dependencias de java..."
+            apt install openjdk-21-jre -y > /dev/null 2>&1
 
             # Creamos directorio para server Minecraft y descargamos el server
             mkdir -p ${MINECRAFT_DIR} && cd ${MINECRAFT_DIR}
-            wget "$SERVER_JAR_URL" -O server.jar
-            java -Xmx1024M -Xms1024M -jar server.jar nogui > /dev/null 2>&1 &
+            wget "${SERVER_JAR_URL}" -O server.jar
+            java -Xmx1024M -Xms1024M -jar server.jar nogui > /var/log/server_mine.log 2>&1 &
             sleep 10
             # Aceptamos el EULA del servidor
             echo "eula=true" > eula.txt
             
             # Configuramos las propiedades de server
             sed -i "s/online-mode=true/online-mode=false/" server.properties
-            read -p "Cantidad de jugadores (máx. 10): " PLY
+            echo -e "\nCantidad de jugadores (máx. 10): " 
+            read PLY
             while (( PLY > 10 || PLY < 1 )) ; do
-                read -p "Debe estar entre 1 y 10. Introduzca cantidad de jugadores: " PLY
+                read -p "\nDebe estar entre 1 y 10. Introduzca cantidad de jugadores: " PLY
             done
             sed -i "s/max-players=20/max-players=${PLY}/" ${MINECRAFT_DIR}/server.properties
-            read -p "¿Qué dificultad quiere [0=Pacífico, 1=Fácil, 2=Normal, 3=Difícil]? " DIF
+            echo -e "\n¿Qué dificultad quiere [0=Pacífico, 1=Fácil, 2=Normal, 3=Difícil]? " 
+            read DIF
             case $DIF in 
                 0|1|2|3) sed -i "s/difficulty=.*/difficulty=${DIF}/" ${MINECRAFT_DIR}/server.properties
                 ;;
-                *) echo "Opción inválida. Usando dificultad predeterminada (Normal)."
+                *) echo -e "\nOpción inválida. Usando dificultad predeterminada (Normal)."
                 ;;
             esac
-            read -p "Escriba el mensaje de bienvenida: " MESG
+            echo -e "\nEscriba el mensaje de bienvenida: " 
+            read MESG
             sed -i "s/motd=.*/motd=${MESG}/" ${MINECRAFT_DIR}/server.properties
             # Convertimos el server en servicio
             touch ${SERVICE_FILE}
@@ -71,34 +95,38 @@ After=network.target
 [Service]
 User=root
 WorkingDirectory=${MINECRAFT_DIR}
-ExecStart=/usr/bin/java -Xmx1024M -Xms1024M -jar $MINECRAFT_DIR/server.jar nogui
+ExecStart=/usr/bin/java -Xmx1024M -Xms1024M -jar ${MINECRAFT_DIR}/server.jar nogui
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 EOF
             systemctl daemon-reload
-            systemctl enable minecraft.service
-            systemctl restart minecraft.service
-
-            echo "Servidor de Minecraft instalado y en ejecución."
+            # Aquí los errores los lanzamos al log personalizados
+            systemctl enable minecraft.service > /var/log/server_mine.log 2>&1
+            systemctl restart minecraft.service > /var/log/server_mine.log 2>&1
+            echo -e "\nServidor de Minecraft instalado y en ejecución."
             exit 0
         ;;
         2)
-            echo "Desinstalando servidor..."
-            systemctl stop minecraft.service
-            systemctl disable minecraft.service
-            rm -rf "$MINECRAFT_DIR" "$SERVICE_FILE"
-            apt purge openjdk-17-jre -y
+            echo -e "\nDesinstalando servidor..."
+            systemctl stop minecraft.service > /var/log/server_mine.log 2>&1
+            systemctl disable minecraft.service > /var/log/server_mine.log 2>&1
+            rm -rf "${MINECRAFT_DIR}" "${SERVICE_FILE}"
+            apt purge openjdk-21-jre -y > /dev/null 2>&1
             systemctl daemon-reload
-            echo "Servidor y dependencias eliminados."
+            echo -e "\nServidor y dependencias eliminados."
             exit 0
         ;;
         3)
-            BACKUP_DIR=~/minecraft-backups
-            mkdir -p $BACKUP_DIR
-            tar -czvf $BACKUP_DIR/backup-$(date +%F-%H-%M).tar.gz ~/minecraft-server
-            echo "Backup completado en $BACKUP_DIR"
+            echo -e "\nCreando copia de seguridad..."
+            hacer_backup
+            echo -e "\n¿Quiere programar la copia de seguridad [S/N]?"
+            read B_OP
+            if [[ ${B_OP} == [sS] ]]; then
+                programar_backup
+            fi
+            echo -e "\nSaliendo del programa..."
             exit 0
         ;;
         0)
