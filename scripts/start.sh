@@ -1,9 +1,9 @@
 #!/bin/bash
-# El siguiente script debe lanzarse con permisos de sudo
+# El siguiente script debe lanzarse con permisos de sudo y siempre desde el directorio scripts
 source .env
 # Función para crear una copia de seguridad del servidor de Minecraft
 hacer_backup() {
-    if [[ ! -d "$BACKUP_DIR" ]]; then
+    if [[ ! -d $BACKUP_DIR ]]; then
         mkdir -p ${BACKUP_DIR}
     fi
     tar -czvf ${BACKUP_DIR}/backup-$(date +%F_%H:%M).tar.gz ${MINECRAFT_DIR} > /dev/null 2>&1
@@ -21,7 +21,15 @@ programar_backup() {
 }
 
 menu() {
-    echo -e "1. Instalar servidor\n2. Desinstalar servidor\n3. Crear copia de seguridad\n0. Salir del programa"
+    echo -e "1. Instalar servidor\n2. Desinstalar servidor\n3. Crear copia de seguridad\n0. Salir del programa\nPulse h para ayuda"
+}
+
+ayuda() {
+    echo ""
+    echo "Menú de ayuda de instalador de servidor de Minecraft."
+    echo "Para elegir la opción que quiera pulse 1 2 o 3. 0 para salir del programa."
+    echo "Páselo bien!!!"
+    echo ""
 }
 
 if [[ $EUID -ne 0 ]]; then
@@ -43,8 +51,10 @@ echo -e "\n                 🎮 ¡Bienvenido al Instalador del Servidor de Mine
 menu
 echo -e "\nSeleccione una opción: " 
 read OP
+while [[ $OP != [h] || $OP != [0] ]]; do
     case $OP in
         1)
+            clear
             echo -e "\nInstalando servidor..."
             # Actualización de repositorios
             echo -e "\nActualizando repositorios..."
@@ -57,6 +67,7 @@ read OP
             apt install openjdk-21-jre -y > /dev/null 2>&1
 
             # Creamos directorio para server Minecraft y descargamos el server
+            echo -e "\nCreando directorio del servidor..."
             mkdir -p ${MINECRAFT_DIR} && cd ${MINECRAFT_DIR}
             wget "${SERVER_JAR_URL}" -O server.jar
             java -Xmx1024M -Xms1024M -jar server.jar nogui > /var/log/server_mine.log 2>&1 &
@@ -65,6 +76,7 @@ read OP
             echo "eula=true" > eula.txt
             
             # Configuramos las propiedades de server
+            echo -e "\nPrepárese para colocar las propiedades!..."
             sed -i "s/online-mode=true/online-mode=false/" server.properties
             echo -e "\nCantidad de jugadores (máx. 10): " 
             read PLY
@@ -84,6 +96,7 @@ read OP
             read MESG
             sed -i "s/motd=.*/motd=${MESG}/" ${MINECRAFT_DIR}/server.properties
             # Convertimos el server en servicio
+            echo -e "\nCreando servicio!..."
             touch ${SERVICE_FILE}
             chmod 777 ${SERVICE_FILE}
                         # Crear servicio systemd
@@ -109,6 +122,7 @@ EOF
             exit 0
         ;;
         2)
+            clear
             echo -e "\nDesinstalando servidor..."
             systemctl stop minecraft.service > /var/log/server_mine.log 2>&1
             systemctl disable minecraft.service > /var/log/server_mine.log 2>&1
@@ -119,6 +133,7 @@ EOF
             exit 0
         ;;
         3)
+            clear
             echo -e "\nCreando copia de seguridad..."
             hacer_backup
             echo -e "\n¿Quiere programar la copia de seguridad [S/N]?"
@@ -130,8 +145,22 @@ EOF
             exit 0
         ;;
         0)
+            clear
             echo "Saliendo del programa..."
             exit 0
+        ;;
+        h)
+            clear
+            ayuda
+            echo -e "\nSeleccione una opción: " 
+            read OP
+        ;;
+        *)
+            clear
+            echo -e "\nOpción inválida"
+            ayuda 
+            echo -e "\nSeleccione una opción: " 
+            read OP
         ;;
     esac
 done
