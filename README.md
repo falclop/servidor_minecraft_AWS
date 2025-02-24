@@ -14,4 +14,4 @@ Necesitamos previamente de:
 
 ### Documentación
 La documentación se encuentra en:
-  - ![Documentación Minecraft](https://github.com/falclop/servidor_minecraft_AWS/blob/main/Servidor_minecraft_con_AWS_Fabian.pdf)
+  - [Documentación Minecraft](https://github.com/falclop/servidor_minecraft_AWS/blob/main/Servidor_minecraft_con_AWS_Fabian.pdf)
